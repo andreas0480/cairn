@@ -7,50 +7,80 @@ dictating your route. That is the design intent.
 
 ## What this is
 
-Three slash commands, one knowledge file, one `CLAUDE.md`. Six files total.
-No state machines, no per-phase document chains, no generators.
+Cairn is the **workflow layer** that sits on top of an externalized
+context system. It does not own the context — your project's `.md` files
+do. Cairn tells Claude how to *use* them on every workflow: when to read,
+when to write, what to log, when to stop.
+
+It ships as four slash commands and a CLAUDE.md you merge into your
+existing project conventions. That's it.
 
 ```
 cairn/
-  README.md          ← you are here
-  CLAUDE.md          ← drop into your repo root (or merge with existing)
-  KNOWLEDGE.md       ← drop into your repo root
+  README.md           ← you are here
+  CLAUDE.md           ← merge into your project's CLAUDE.md
+  KNOWLEDGE.md        ← drop into your repo root
   commands/
-    scout.md         ← drop into <repo>/.claude/commands/
+    scout.md          ← drop into <repo>/.claude/commands/
     recall.md
     learn.md
+    handover.md
 ```
 
-## What it solves
+## The substrate Cairn assumes
 
-Five problems worth solving on every non-trivial change in AI-assisted work:
+Cairn layers on top of the five-file context architecture from the
+[context-aware starter prompt](https://blog.belitz.se/posts/context-aware-starter-prompt).
+If your project doesn't have these files yet, run the starter prompt
+first to bootstrap them; then layer Cairn on top.
 
-- **Discovery before code.** Map blast radius. Check existing tests. Read
-  what the project already knows about the area.
-- **Memory across sessions.** Persist what you've learned. Quirks, fragile
-  modules, APIs that time out — all of that lives in your head if it lives
-  anywhere.
-- **Evidence over assertion.** "Verified" / "works" / "looks good" are
-  claims, not proofs. Show the command and the output, then state the
-  conclusion.
-- **A stop condition.** Two failed attempts on the same approach is enough.
-  A third is a hunch dressed as effort.
-- **A trace someone can read.** The git log and the diff are the audit
-  trail with a real audience. Per-phase documents are paperwork.
+| File | Purpose | Cadence |
+|------|---------|---------|
+| `CLAUDE.md` | Project constitution — stakeholder, objectives, standards | Rarely (after discovery) |
+| `PROGRESS.md` | Living build log — done / in progress / next / blocked | Every completed task |
+| `DECISIONS.md` | ADR — every constraining technical choice with rationale | Every major decision |
+| `TECHNICAL.md` | Implementation details — stack, contracts, data models | As architecture evolves |
+| `HANDOVER.md` | Session transition snapshot — overwritten each session | End of every session |
+| `KNOWLEDGE.md` | Runtime quirks, fragile modules, observed gotchas | Via `/learn` with evidence |
 
-These five are inexpensive to enforce and large in effect. Cairn is the
-smallest framework that enforces them without becoming bureaucracy.
+The first five files are owned by the starter-prompt protocol. The sixth
+(`KNOWLEDGE.md`) is Cairn's addition — backward-looking gotchas that
+don't belong in `DECISIONS.md` (forward-looking) or `TECHNICAL.md`
+(specs). Each Cairn command knows which files to touch.
+
+## What Cairn enforces
+
+The starter prompt establishes the *what* (the file architecture). Cairn
+adds the *how* — the workflow protocol that's mostly already in the
+starter prompt, applied per-task:
+
+- **Discovery proportional to risk.** Tier the work; don't run a 5-step
+  ceremony on a typo.
+- **Session-start protocol.** First response in every session reads
+  `CLAUDE.md` + `PROGRESS.md` + `HANDOVER.md` before touching anything.
+- **Write as you go.** `PROGRESS.md` after every completed task,
+  `DECISIONS.md` the moment a constraining decision is made.
+- **10–15 exchange checkpoint.** Silent self-check against `CLAUDE.md`
+  and `DECISIONS.md` to catch drift early.
+- **Re-anchor before significant implementation.** Re-read the relevant
+  `DECISIONS.md` entries; never assume prior context is still active.
+- **Show evidence, never claim.** Output or it didn't happen.
+- **Stop at two attempts.** Don't grind on a hunch.
+- **Drift → reset.** When the conversation degrades, run `/handover` and
+  start fresh.
+- **Files are the source of truth.** Memory loses to files. Always.
 
 ## Install
 
+You should already have a `CLAUDE.md` from the starter prompt. Merge
+the conventions section from `cairn/CLAUDE.md` into it. Then drop the
+rest in:
+
 ```bash
+# Merge cairn/CLAUDE.md into your existing CLAUDE.md (manually)
 cp cairn/commands/*.md /path/to/your-repo/.claude/commands/
-cp cairn/CLAUDE.md     /path/to/your-repo/CLAUDE.md
 cp cairn/KNOWLEDGE.md  /path/to/your-repo/KNOWLEDGE.md
 ```
-
-If your repo already has a `CLAUDE.md`, merge the conventions section in
-manually. Cairn doesn't try to own the whole file.
 
 ## Usage
 
@@ -63,6 +93,10 @@ manually. Cairn doesn't try to own the whole file.
 /recall                       # uses current task context
 
 /learn "RAG retriever times out above 50 QPS — added pool cap"
+/learn "chose Postgres over Mongo — strong relational shape"
+
+/handover                     # at session end, no exceptions
+/handover "watch out for the migration in branch X"
 ```
 
 ## The tier rubric
@@ -70,17 +104,30 @@ manually. Cairn doesn't try to own the whole file.
 | Tier | Examples | Discovery |
 |------|----------|-----------|
 | **T1** | typo, rename, comment, format change | none — edit and save |
-| **T2** | contained fix in one module, single-file feature | grep callers, check existing tests, plan in one sentence |
-| **T3** | non-trivial bug, new feature, multi-module change | recall, blast radius, plan, red-green tests, regression check, optional `/learn` |
+| **T2** | contained fix in one module, single-file feature | grep callers, check tests, plan in one sentence |
+| **T3** | non-trivial bug, new feature, multi-module change | `/recall` across the context layer, blast radius, plan, red-green tests, regression check, `/learn` if anything durable surfaced |
 
-The agent declares the tier in its first response. Override with `--tier N`.
-The point of tiering is to avoid enforcing the same machinery on a typo and
-a multi-module refactor.
+The agent declares the tier in its first response. Override with
+`--tier N`. The point of tiering is to avoid enforcing the same machinery
+on a typo and a multi-module refactor.
+
+## How `/learn` routes
+
+| Insight type | Destination | Format |
+|--------------|-------------|--------|
+| Runtime quirk, fragile module, observed gotcha | `KNOWLEDGE.md` | what / why / evidence / scope / revisit |
+| Architectural decision, framework choice | `DECISIONS.md` | decision / alternatives / rationale / date / supersedes |
+| Implementation spec (contract, schema, model) | `TECHNICAL.md` | update the relevant section in place |
+| Build progress | `PROGRESS.md` (auto, by `/scout`) | terse single-line per task |
+
+If a single insight spans multiple files, `/learn` splits it and
+cross-references. It refuses to write without evidence.
 
 ## When Cairn is the wrong tool
 
-Cairn is the floor for solo work. Below it you're vibe-coding; above it
-you're paying ceremony tax. Pick something heavier when you need any of:
+Cairn is the floor for solo work backed by a curated context layer.
+Below it you're vibe-coding; above it you're paying ceremony tax. Pick
+something heavier when you need any of:
 
 - compliance-grade audit trails,
 - multi-team standardization across many engineers,
