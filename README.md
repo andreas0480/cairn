@@ -72,14 +72,38 @@ starter prompt, applied per-task:
 
 ## Install
 
-You should already have a `CLAUDE.md` from the starter prompt. Merge
-the conventions section from `cairn/CLAUDE.md` into it. Then drop the
-rest in:
+One line, from the directory you want to install into:
 
 ```bash
-# Merge cairn/CLAUDE.md into your existing CLAUDE.md (manually)
+curl -fsSL https://raw.githubusercontent.com/andreas0480/cairn/main/install.sh | bash
+```
+
+Or into a specific path:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/andreas0480/cairn/main/install.sh | bash -s -- --target /path/to/your-repo
+```
+
+The installer is idempotent — re-run it any time to pick up updates.
+It drops the four slash commands into `.claude/commands/`, creates
+`KNOWLEDGE.md` if missing (never overwrites your entries), and either
+creates `CLAUDE.md` from scratch or appends/updates the Cairn section
+between `<!-- BEGIN cairn -->` / `<!-- END cairn -->` markers in your
+existing one.
+
+You should already have a `CLAUDE.md` from the starter prompt for the
+context layer to work. If not, the installer creates a minimal one with
+just the Cairn section and tells you to bootstrap the rest.
+
+### Manual install
+
+If you'd rather not curl-pipe-bash:
+
+```bash
+git clone https://github.com/andreas0480/cairn.git
 cp cairn/commands/*.md /path/to/your-repo/.claude/commands/
 cp cairn/KNOWLEDGE.md  /path/to/your-repo/KNOWLEDGE.md
+# Append cairn/CLAUDE.md to your existing CLAUDE.md (or copy it whole)
 ```
 
 ## Usage
